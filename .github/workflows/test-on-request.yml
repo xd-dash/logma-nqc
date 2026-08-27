@@ -72,9 +72,9 @@ jobs:
           go-version-file: source/go.mod
           cache: false
 
-      - name: Download modules
+      - name: Prepare modules
         working-directory: source
-        run: go mod download
+        run: go mod tidy
 
       - name: Run NQC tests
         working-directory: source
