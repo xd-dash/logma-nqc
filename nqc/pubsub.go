@@ -126,6 +126,17 @@ func (s *Subscriber) Run(ctx context.Context) error {
 	}
 	pubsub := s.client.Subscribe(ctx, channel)
 	defer pubsub.Close()
+
+	stopClose := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = pubsub.Close()
+		case <-stopClose:
+		}
+	}()
+	defer close(stopClose)
+
 	if _, err := pubsub.Receive(ctx); err != nil {
 		return fmt.Errorf("nqc: subscribe %s: %w", channel, err)
 	}
