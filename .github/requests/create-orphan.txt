@@ -1,0 +1,2 @@
+branch=automation
+append_random_suffix=false
