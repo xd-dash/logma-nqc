@@ -1,0 +1,62 @@
+name: Create Orphan Branch From Request
+
+on:
+  push:
+    branches:
+      - claude/redis-cdn-consistency-design-zz6wta
+    paths:
+      - ".github/requests/create-orphan.txt"
+
+permissions:
+  contents: write
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout request
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Parse request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          request=.github/requests/create-orphan.txt
+          branch="$(sed -n 's/^branch=//p' "$request" | tail -n1)"
+          append="$(sed -n 's/^append_random_suffix=//p' "$request" | tail -n1)"
+
+          [[ -n "$branch" ]] || {
+            echo "::error::branch is required"
+            exit 1
+          }
+
+          [[ -n "$append" ]] || append=true
+
+          case "$append" in
+            true|false) ;;
+            *)
+              echo "::error::append_random_suffix must be true or false"
+              exit 1
+              ;;
+          esac
+
+          git check-ref-format --branch "$branch"
+
+          {
+            echo "branch=$branch"
+            echo "append=$append"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create empty orphan branch
+        id: orphan
+        uses: xd-dash/create-orphan@main
+        with:
+          branch: ${{ steps.request.outputs.branch }}
+          append-random-suffix: ${{ steps.request.outputs.append }}
+
+      - name: Report branch
+        run: echo "Created ${{ steps.orphan.outputs.branch }}"
