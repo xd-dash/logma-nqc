@@ -1,0 +1,81 @@
+name: Test Logma NQC From Request
+
+on:
+  push:
+    branches:
+      - automation
+    paths:
+      - ".github/requests/test.txt"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:8.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    env:
+      NQC_REDIS_ADDR: 127.0.0.1:6379
+
+    steps:
+      - name: Checkout automation request
+        uses: actions/checkout@v6
+        with:
+          ref: automation
+          fetch-depth: 1
+          persist-credentials: false
+          path: control
+
+      - name: Parse test request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          request=control/.github/requests/test.txt
+          ref="$(sed -n 's/^ref=//p' "$request" | tail -n1)"
+
+          [[ -n "$ref" ]] || {
+            echo "::error::ref is required"
+            exit 1
+          }
+
+          git check-ref-format --branch "$ref" >/dev/null 2>&1 || {
+            if ! [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::ref must be a branch name or full commit SHA"
+              exit 1
+            fi
+          }
+
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.request.outputs.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: source
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: source/go.mod
+          cache: false
+
+      - name: Download modules
+        working-directory: source
+        run: go mod download
+
+      - name: Run NQC tests
+        working-directory: source
+        run: go test -race ./...
