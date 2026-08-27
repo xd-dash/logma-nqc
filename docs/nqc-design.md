@@ -242,7 +242,7 @@ Use a versioned, bounded message format.
   "v": 1,
   "namespace": "public-assets",
   "key": "/foo.json",
-  "key_id": "9b7e...",
+  "key_id": "9b7e4f0d64c2a9e74b16c93d90b01d4c46bb1d67f5d7e9f30ad6ad27f977e4aa",
   "revision": "0000000000000001000000000000006b",
   "op": "put",
   "content_hash": "sha256:abc..."
@@ -273,7 +273,11 @@ On receipt:
 hint(key) = max(hint(key), incoming)
 ~~~
 
-but only in the soft hint store. Hints have a bounded TTL.
+but only in the soft hint store. Hints have a bounded TTL. AdvanceHint must also consult
+the shard floor: when a key has no confirmed live entry and incoming.revision is less
+than or equal to the completed snapshot floor, ignore the hint as already covered by
+anti-entropy. This is the concrete rule that prevents an old delayed PUT from resurrecting
+a key after its per-key delete state has been garbage-collected.
 
 If a hint claims revision 999 while authoritative revalidation says the current state is
 100, the edge records a suspect-hint metric and does not permanently advance confirmed to
@@ -420,7 +424,7 @@ Anti-entropy is what makes NQC more than Pub/Sub invalidation.
 The authoritative namespace is divided using a fixed shard scheme.
 
 ~~~text
-shard = first K bits of SHA-256(key_id)
+shard = first K bits of key_id
 ~~~
 
 Shard count and hashing scheme are protocol configuration. They cannot silently change;
